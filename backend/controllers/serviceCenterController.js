@@ -1,3 +1,4 @@
+//backend\controllers\serviceCenterController.js
 const { ServiceCenter, Product, Review, User, sequelize } = require('../models/models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -33,24 +34,25 @@ class ServiceCenterController {
     /* Регистрация сервисного центра */
     async registration(req, res) {
         try {
-            const {
-                name,
-                contactPerson,
-                registrationNumber,
-                phone,
-                email,
-                password,
-                address,
-                establishedYear,
-                specialization,
-                offersDelivery
-            } = req.body;
+            // ВРЕМЕННЫЙ лог, чтобы увидеть что реально приходит от клиента
+            console.log('REG BODY:', req.body, 'FILE:', !!req.file);
 
-            if (!name || !contactPerson || !registrationNumber || !phone || !email || !password || !address || !specialization) {
-                return res.status(400).json({ message: 'Заполнены не все обязательные поля' });
+            // Все поля из multipart приходят строками. Сразу trim.
+            const pick = (v) => (typeof v === 'string' ? v.trim() : v);
+            const {
+                name, contactPerson, registrationNumber, phone,
+                email, password, address,
+                establishedYear, specialization, offersDelivery
+            } = Object.fromEntries(Object.entries(req.body).map(([k, v]) => [k, pick(v)]));
+
+            // Валидация обязательных полей (после trim)
+            const required = { name, contactPerson, registrationNumber, phone, email, password, address, specialization };
+            const missing = Object.entries(required).filter(([, v]) => !v);
+            if (missing.length) {
+                return res.status(400).json({ message: `Заполнены не все обязательные поля: ${missing.map(([k]) => k).join(', ')}` });
             }
 
-            const normalizedEmail = String(email).trim().toLowerCase();
+            const normalizedEmail = String(email).toLowerCase();
             const existing = await ServiceCenter.findOne({ where: { email: normalizedEmail } });
             if (existing) {
                 return res.status(400).json({ message: 'Сервисный центр с таким email уже существует' });
@@ -74,8 +76,8 @@ class ServiceCenterController {
                 email: normalizedEmail,
                 password: passwordHash,
                 address,
-                establishedYear: establishedYear ? parseInt(establishedYear) : null,
-                specialization,
+                establishedYear: establishedYear ? parseInt(establishedYear, 10) : null,
+                specialization, // ENUM — если значение не из списка, Sequelize сам бросит ошибку
                 offersDelivery: offersDelivery === 'true' || offersDelivery === true,
                 logo
             });
@@ -115,14 +117,10 @@ class ServiceCenterController {
     /* Проверка токена */
     async auth(req, res) {
         try {
-            const authHeader = req.headers.authorization || '';
-            const [scheme, token] = authHeader.split(' ');
-            if (scheme !== 'Bearer' || !token) {
-                return res.status(401).json({ message: 'Не авторизован' });
-            }
+            const id = req.user?.serviceCenterId;
+            if (!id) return res.status(401).json({ message: 'Не авторизован' });
 
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
-            const center = await ServiceCenter.findByPk(decoded.serviceCenterId);
+            const center = await ServiceCenter.findByPk(id);
             if (!center) return res.status(401).json({ message: 'Токен недействителен' });
 
             return res.json(sanitize(center));
