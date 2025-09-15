@@ -1,4 +1,3 @@
-// src/components/Header.jsx
 import React, { useEffect, useState } from 'react';
 import {
     Navbar,
@@ -7,22 +6,30 @@ import {
     Container,
     Badge,
     Button,
+    Spinner,
 } from 'react-bootstrap';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getUserToken, authHeader } from '../utils/auth';
+import './Header.css';
 
 const API = process.env.REACT_APP_API_URL || '/api';
+
+function initials(u) {
+    const a = (u?.firstName || '').trim()[0] || '';
+    const b = (u?.lastName || '').trim()[0] || '';
+    return (a + b || 'U').toUpperCase();
+}
 
 export default function Header() {
     const navigate = useNavigate();
     const {
         user,
+        userLoading,
         logoutUser,
         center,
-        logoutServiceCenter,
-        userLoading,
         centerLoading,
+        logoutServiceCenter,
     } = useAuth();
 
     const [cartCount, setCartCount] = useState(0);
@@ -38,7 +45,6 @@ export default function Header() {
                 return;
             }
             try {
-                // Корзина: GET /api/carts
                 const res = await fetch(`${API}/carts`, {
                     headers: { ...authHeader(token) },
                 });
@@ -73,80 +79,102 @@ export default function Header() {
     };
 
     return (
-        <Navbar bg="light" expand="lg" className="shadow-sm">
+        <Navbar expand="lg" className="app-navbar sticky-top">
             <Container>
-                <Navbar.Brand as={NavLink} to="/">
-                    🚲 Veloservice
+                {/* Brand */}
+                <Navbar.Brand as={NavLink} to="/" className="brand">
+                    <span className="brand__logo" aria-hidden>🚲</span>
+                    <span className="brand__text">Veloservice</span>
                 </Navbar.Brand>
 
-                <Navbar.Toggle aria-controls="main-nav" />
+                <Navbar.Toggle aria-controls="main-nav" className="app-toggle" />
                 <Navbar.Collapse id="main-nav">
-                    {/* Левые пункты */}
-                    <Nav className="me-auto">
-                        <Nav.Link as={NavLink} to="/products">
+                    {/* Left */}
+                    <Nav className="me-auto nav-left">
+                        <Nav.Link as={NavLink} to="/products" end>
                             Товары
                         </Nav.Link>
-                        <Nav.Link as={NavLink} to="/centers">
+                        <Nav.Link as={NavLink} to="/centers" end>
                             Сервис-центры
                         </Nav.Link>
                     </Nav>
 
-                    {/* Правые пункты */}
-                    <Nav className="ms-auto align-items-lg-center">
-                        {/* Блок пользователя */}
-                        {user ? (
-                            <>
-                                <Nav.Link as={NavLink} to="/cart">
-                                    Корзина{' '}
-                                    {cartCount > 0 && (
-                                        <Badge bg="primary" pill>
-                                            {cartCount}
-                                        </Badge>
-                                    )}
-                                </Nav.Link>
-                                <NavDropdown
-                                    align="end"
-                                    title={`${user.firstName || 'Профиль'}`}
-                                    id="user-menu"
-                                >
-                                    <NavDropdown.Item as={NavLink} to="/profile">
-                                        Мой профиль
-                                    </NavDropdown.Item>
-                                    <NavDropdown.Item as={NavLink} to="/orders">
-                                        Мои заказы
-                                    </NavDropdown.Item>
-                                    <NavDropdown.Item as={NavLink} to="/requests">
-                                        Мои заявки
-                                    </NavDropdown.Item>
-                                    <NavDropdown.Divider />
-                                    <NavDropdown.Item onClick={handleLogoutUser}>
-                                        Выйти
-                                    </NavDropdown.Item>
-                                </NavDropdown>
-                            </>
+                    {/* Right */}
+                    <Nav className="ms-auto align-items-lg-center nav-right">
+                        {/* Корзина / если юзер есть */}
+                        {user && (
+                            <Nav.Link as={NavLink} to="/cart" className="cart-link">
+                                <span className="cart-link__icon" aria-hidden>🛒</span>
+                                <span>Корзина</span>
+                                {cartCount > 0 && (
+                                    <Badge bg="primary" pill className="cart-link__badge">
+                                        {cartCount}
+                                    </Badge>
+                                )}
+                            </Nav.Link>
+                        )}
+
+                        {/* Пользователь */}
+                        {userLoading ? (
+                            <div className="nav-skel">
+                                <Spinner size="sm" />
+                            </div>
+                        ) : user ? (
+                            <NavDropdown
+                                align="end"
+                                id="user-menu"
+                                title={
+                                    <span className="user-chip">
+                                        <span className="user-chip__avatar">{initials(user)}</span>
+                                        <span className="user-chip__name">
+                                            {user.firstName || 'Профиль'}
+                                        </span>
+                                    </span>
+                                }
+                            >
+                                <NavDropdown.Item as={NavLink} to="/profile">
+                                    Мой профиль
+                                </NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/orders">
+                                    Мои заказы
+                                </NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/requests">
+                                    Мои заявки
+                                </NavDropdown.Item>
+                                <NavDropdown.Divider />
+                                <NavDropdown.Item onClick={handleLogoutUser}>
+                                    Выйти
+                                </NavDropdown.Item>
+                            </NavDropdown>
                         ) : (
                             <>
                                 <Nav.Link as={NavLink} to="/login">
                                     Войти
                                 </Nav.Link>
-                                <Button
-                                    as={NavLink}
-                                    to="/register"
-                                    size="sm"
-                                    className="ms-2"
-                                >
+                                <Button as={NavLink} to="/register" size="sm" className="ms-2">
                                     Регистрация
                                 </Button>
                             </>
                         )}
 
-                        {/* Блок сервис-центра (может быть одновременно с пользовательским) */}
-                        {center ? (
+                        {/* Сервис-центр */}
+                        {centerLoading ? (
+                            <div className="nav-skel ms-2">
+                                <Spinner size="sm" />
+                            </div>
+                        ) : center ? (
                             <NavDropdown
                                 align="end"
-                                title={center.name || 'Сервис-центр'}
                                 id="center-menu"
                                 className="ms-lg-3"
+                                title={
+                                    <span className="center-chip">
+                                        <span className="center-chip__dot" />
+                                        <span className="center-chip__name">
+                                            {center.name || 'Сервис-центр'}
+                                        </span>
+                                    </span>
+                                }
                             >
                                 <NavDropdown.Item as={NavLink} to="/center/dashboard">
                                     Дашборд
@@ -177,9 +205,9 @@ export default function Header() {
                         ) : (
                             <NavDropdown
                                 align="end"
-                                title="Для сервис-центров"
                                 id="center-auth"
                                 className="ms-lg-3"
+                                title="Для сервис-центров"
                             >
                                 <NavDropdown.Item as={NavLink} to="/center/login">
                                     Войти

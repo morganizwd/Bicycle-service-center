@@ -1,0 +1,97 @@
+/* HERO */
+.sc-hero {
+    border: none;
+    border-radius: 18px;
+    position: relative;
+    overflow: hidden;
+    min-height: 260px;
+    background: #f3f4f6;
+}
+
+.sc-hero__img {
+    position: absolute;
+    inset: 0;
+    background-image: var(--hero-url, none);
+    background-size: cover;
+    background-position: center 55%;
+    background-repeat: no-repeat;
+    filter: saturate(1.05);
+}
+
+.sc-hero__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .55) 55%, rgba(255, 255, 255, 0) 80%);
+}
+
+.sc-hero__content {
+    position: relative;
+    max-width: 620px;
+}
+
+/* FILTER bar */
+.sc-filter {
+    border: none;
+    border-radius: 14px;
+    background: #f8f9fb;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .04);
+}
+
+.sc-filter .form-control,
+.sc-filter .form-select {
+    border-radius: 10px;
+}
+
+/* CENTER card */
+.ccard {
+    border: none;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow:
+        0 1px 1px rgba(0, 0, 0, .04),
+        0 8px 20px rgba(0, 0, 0, .06);
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.ccard:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 2px 2px rgba(0, 0, 0, .05),
+        0 12px 28px rgba(0, 0, 0, .10);
+}
+
+.ccard__img {
+    height: 160px;
+    background-image: var(--img, none);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+}
+
+.ccard__ribbon {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-weight: 500;
+}
+
+.ccard__body {
+    padding: 14px 16px 16px 16px;
+}
+
+/* EMPTY state */
+.sc-empty {
+    border: none;
+    border-radius: 14px;
+    background: #f4f6f8;
+    color: #6b7280;
+}
+
+@media (max-width: 991px) {
+    .sc-hero {
+        min-height: 300px;
+    }
+}

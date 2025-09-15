@@ -1,20 +1,28 @@
+// client/bicycle-service/src/components/client/requests/CreateServiceRequest.jsx
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
-
-const API = process.env.REACT_APP_API_URL || '/api';
+import api from '../../../api/axiosConfig';
 
 export default function CreateServiceRequest() {
-    const { token } = useAuth();
+    const { user } = useAuth(); // проверяем авторизацию именно пользователя
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [centers, setCenters] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
 
-    const [serviceCenterId, setServiceCenterId] = useState('');
-    const [requestDate, setRequestDate] = useState('');
+    const preselectedCenterId = location.state?.serviceCenterId || '';
+    const [serviceCenterId, setServiceCenterId] = useState(String(preselectedCenterId));
+
+    // datetime-local требует YYYY-MM-DDTHH:mm
+    const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+    const [requestDate, setRequestDate] = useState(nowLocal);
+
     const [bikeModel, setBikeModel] = useState('');
     const [problemDescription, setProblemDescription] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -22,10 +30,8 @@ export default function CreateServiceRequest() {
     async function loadCenters() {
         setLoadingCenters(true);
         try {
-            const res = await fetch(`${API}/servicecenters`);
-            if (!res.ok) throw new Error();
-            const payload = await res.json();
-            const list = payload?.serviceCenters || payload || [];
+            const { data } = await api.get('/service-centers');
+            const list = data?.serviceCenters || data || [];
             setCenters(list);
         } catch {
             toast.error('Не удалось загрузить список сервис-центров');
@@ -34,31 +40,36 @@ export default function CreateServiceRequest() {
         }
     }
 
-    useEffect(() => { loadCenters(); }, []);
+    useEffect(() => {
+        loadCenters();
+        // автоподстановка центра из state (если пришли со страницы центра)
+        if (preselectedCenterId) setServiceCenterId(String(preselectedCenterId));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     async function submit(e) {
         e.preventDefault();
+
+        if (!user) {
+            toast.info('Войдите в аккаунт, чтобы создать заявку');
+            navigate('/login', { replace: true, state: { from: '/requests/new' } });
+            return;
+        }
+
         setSubmitting(true);
         try {
-            const res = await fetch(`${API}/servicerequests`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    serviceCenterId: Number(serviceCenterId),
-                    requestDate,
-                    bikeModel,
-                    problemDescription
-                })
+            await api.post('/serviceRequests', {
+                serviceCenterId: Number(serviceCenterId),
+                requestDate,          // ISO из input datetime-local ок
+                bikeModel: bikeModel || null,
+                problemDescription,
             });
-            if (!res.ok) {
-                let msg = 'Не удалось создать заявку';
-                try { const err = await res.json(); if (err?.message) msg = err.message; } catch { }
-                throw new Error(msg);
-            }
+
             toast.success('Заявка создана');
             navigate('/requests');
-        } catch (e) {
-            toast.error(e.message);
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'Не удалось создать заявку';
+            toast.error(msg);
         } finally {
             setSubmitting(false);
         }
@@ -77,9 +88,13 @@ export default function CreateServiceRequest() {
                                 <Col md={6}>
                                     <Form.Group>
                                         <Form.Label>Сервисный центр</Form.Label>
-                                        <Form.Select value={serviceCenterId} onChange={(e) => setServiceCenterId(e.target.value)} required>
+                                        <Form.Select
+                                            value={serviceCenterId}
+                                            onChange={(e) => setServiceCenterId(e.target.value)}
+                                            required
+                                        >
                                             <option value="">— Выберите центр —</option>
-                                            {centers.map(c => (
+                                            {centers.map((c) => (
                                                 <option key={c.id} value={c.id}>{c.name}</option>
                                             ))}
                                         </Form.Select>
@@ -99,7 +114,10 @@ export default function CreateServiceRequest() {
                                 <Col md={6}>
                                     <Form.Group>
                                         <Form.Label>Модель велосипеда (необязательно)</Form.Label>
-                                        <Form.Control value={bikeModel} onChange={(e) => setBikeModel(e.target.value)} />
+                                        <Form.Control
+                                            value={bikeModel}
+                                            onChange={(e) => setBikeModel(e.target.value)}
+                                        />
                                     </Form.Group>
                                 </Col>
                                 <Col md={12}>

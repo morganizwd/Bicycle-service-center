@@ -1,13 +1,13 @@
+// src/components/client/profile/ProfilePage.jsx
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
-
-const API = process.env.REACT_APP_API_URL || '/api';
+import api from '../../../api/axiosConfig';
 
 export default function ProfilePage() {
-    const { token, user, refreshUser } = useAuth();
-    const [loading, setLoading] = useState(!user);
+    const { user, userLoading, refreshUser } = useAuth();
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState({
@@ -16,13 +16,13 @@ export default function ProfilePage() {
     const [photoFile, setPhotoFile] = useState(null);
 
     useEffect(() => {
+        let ignore = false;
         async function load() {
             setLoading(true);
             try {
-                // /user/auth уже возвращает текущего пользователя (мы под гардом, токен валидный)
-                const res = await fetch(`${API}/user/auth`, { headers: { Authorization: `Bearer ${token}` } });
-                if (!res.ok) throw new Error();
-                const u = await res.json();
+                // axios сам подставит Authorization из интерсептора
+                const { data: u } = await api.get('/users/auth');
+                if (ignore) return;
                 setForm({
                     firstName: u.firstName || '',
                     lastName: u.lastName || '',
@@ -34,11 +34,11 @@ export default function ProfilePage() {
             } catch {
                 toast.error('Не удалось загрузить профиль');
             } finally {
-                setLoading(false);
+                if (!ignore) setLoading(false);
             }
         }
         load();
-        // eslint-disable-next-line
+        return () => { ignore = true; };
     }, []);
 
     function setField(k, v) {
@@ -53,26 +53,20 @@ export default function ProfilePage() {
             Object.entries(form).forEach(([k, v]) => data.append(k, v ?? ''));
             if (photoFile) data.append('photo', photoFile);
 
-            const res = await fetch(`${API}/user/${user.id}`, {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}` },
-                body: data
-            });
-            if (!res.ok) {
-                let msg = 'Не удалось сохранить профиль';
-                try { const err = await res.json(); if (err?.message) msg = err.message; } catch { }
-                throw new Error(msg);
-            }
+            // axios: заголовок Authorization добавится автоматически
+            await api.put(`/users/${user.id}`, data);
             toast.success('Профиль обновлён');
-            await refreshUser(); // перезагрузим контекст
+            await refreshUser(); // обновим контекст
         } catch (e) {
-            toast.error(e.message);
+            toast.error(e?.response?.data?.message || 'Не удалось сохранить профиль');
         } finally {
             setSaving(false);
         }
     }
 
-    if (loading) return <div className="d-flex justify-content-center py-5"><Spinner /></div>;
+    if (userLoading || loading) {
+        return <div className="d-flex justify-content-center py-5"><Spinner /></div>;
+    }
 
     return (
         <>
@@ -126,7 +120,7 @@ export default function ProfilePage() {
                         </Row>
 
                         <div className="mt-3 d-flex gap-2">
-                            <Button type="submit" disabled={saving}>Сохранить</Button>
+                            <Button type="submit" disabled={saving}>{saving ? 'Сохранение…' : 'Сохранить'}</Button>
                         </div>
                     </Form>
                 </Card.Body>

@@ -1,13 +1,13 @@
+// src/components/client/cart/CartPage.jsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
-
-const API = process.env.REACT_APP_API_URL || '/api';
+import api from '../../../api/axiosConfig';
 
 export default function CartPage() {
-    const { token } = useAuth();
+    const { user } = useAuth(); // сам токен не нужен – axios сам подставит
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [cart, setCart] = useState(null);
@@ -16,41 +16,34 @@ export default function CartPage() {
     async function load() {
         setLoading(true);
         try {
-            const res = await fetch(`${API}/cart`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error();
-            setCart(await res.json());
-        } catch {
-            toast.error('Не удалось загрузить корзину');
+            const { data } = await api.get('/carts');
+            setCart(data);
+        } catch (e) {
+            const msg = e?.response?.data?.message || 'Не удалось загрузить корзину';
+            toast.error(msg);
         } finally {
             setLoading(false);
         }
     }
 
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+    useEffect(() => { load(); }, []);
 
     const subtotal = useMemo(() => {
         if (!cart?.CartItems) return 0;
-        return cart.CartItems.reduce((sum, ci) => sum + Number(ci.Product?.price || 0) * ci.quantity, 0);
+        return cart.CartItems.reduce(
+            (sum, ci) => sum + Number(ci.Product?.price || 0) * ci.quantity,
+            0
+        );
     }, [cart]);
 
     async function changeQty(productId, nextQty) {
-        if (nextQty <= 0) {
-            removeItem(productId);
-            return;
-        }
+        if (nextQty <= 0) return removeItem(productId);
         try {
             setUpdating(productId);
-            const res = await fetch(`${API}/cart/update/${productId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ quantity: nextQty })
-            });
-            if (!res.ok) throw new Error();
+            await api.put(`/carts/update/${productId}`, { quantity: nextQty });
             await load();
-        } catch {
-            toast.error('Не удалось обновить количество');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Не удалось обновить количество');
         } finally {
             setUpdating(null);
         }
@@ -59,15 +52,11 @@ export default function CartPage() {
     async function removeItem(productId) {
         try {
             setUpdating(productId);
-            const res = await fetch(`${API}/cart/remove/${productId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error();
+            await api.delete(`/carts/remove/${productId}`);
             toast.success('Товар удалён из корзины');
             await load();
-        } catch {
-            toast.error('Не удалось удалить товар');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Не удалось удалить товар');
         } finally {
             setUpdating(null);
         }
@@ -76,18 +65,20 @@ export default function CartPage() {
     async function clearCart() {
         try {
             setUpdating('all');
-            const res = await fetch(`${API}/cart/clear`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error();
+            await api.delete('/carts/clear');
             toast.success('Корзина очищена');
             await load();
-        } catch {
-            toast.error('Не удалось очистить корзину');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Не удалось очистить корзину');
         } finally {
             setUpdating(null);
         }
+    }
+
+    if (!user) {
+        // На всякий случай (хотя маршрут и так под PrivateRoute)
+        navigate('/login', { replace: true, state: { from: '/cart' } });
+        return null;
     }
 
     if (loading) return <div className="d-flex justify-content-center py-5"><Spinner /></div>;
@@ -123,13 +114,21 @@ export default function CartPage() {
                                                 <td>
                                                     <div className="d-flex align-items-center gap-2">
                                                         {ci.Product?.photo && (
-                                                            <img src={ci.Product.photo} alt={ci.Product.name} width={56} height={56} style={{ objectFit: 'cover', borderRadius: 8 }} />
+                                                            <img
+                                                                src={ci.Product.photo}
+                                                                alt={ci.Product.name}
+                                                                width={56}
+                                                                height={56}
+                                                                style={{ objectFit: 'cover', borderRadius: 8 }}
+                                                            />
                                                         )}
                                                         <div>
                                                             <div className="fw-semibold">
                                                                 <Link to={`/product/${ci.Product?.id}`}>{ci.Product?.name}</Link>
                                                             </div>
-                                                            <div className="text-muted small">{ci.Product?.brand} {ci.Product?.model}</div>
+                                                            <div className="text-muted small">
+                                                                {ci.Product?.brand} {ci.Product?.model}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -139,15 +138,19 @@ export default function CartPage() {
                                                         <Button
                                                             size="sm"
                                                             variant="outline-secondary"
-                                                            disabled={updating === ci.Product?.id}
+                                                            disabled={updating === ci.productId}
                                                             onClick={() => changeQty(ci.productId, ci.quantity - 1)}
-                                                        >−</Button>
+                                                        >
+                                                            −
+                                                        </Button>
                                                         <span className="px-2">{ci.quantity}</span>
                                                         <Button
                                                             size="sm"
-                                                            disabled={updating === ci.Product?.id}
+                                                            disabled={updating === ci.productId}
                                                             onClick={() => changeQty(ci.productId, ci.quantity + 1)}
-                                                        >+</Button>
+                                                        >
+                                                            +
+                                                        </Button>
                                                     </div>
                                                 </td>
                                                 <td className="text-end">
@@ -157,7 +160,7 @@ export default function CartPage() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline-danger"
-                                                        disabled={updating === ci.Product?.id}
+                                                        disabled={updating === ci.productId}
                                                         onClick={() => removeItem(ci.productId)}
                                                     >
                                                         Удалить
@@ -168,10 +171,16 @@ export default function CartPage() {
                                     </tbody>
                                 </Table>
                                 <div className="d-flex justify-content-between">
-                                    <Button variant="outline-secondary" onClick={clearCart} disabled={updating === 'all'}>
+                                    <Button
+                                        variant="outline-secondary"
+                                        onClick={clearCart}
+                                        disabled={updating === 'all'}
+                                    >
                                         Очистить корзину
                                     </Button>
-                                    <Button as={Link} to="/products" variant="link">Продолжить покупки</Button>
+                                    <Button as={Link} to="/products" variant="link">
+                                        Продолжить покупки
+                                    </Button>
                                 </div>
                             </Card.Body>
                         </Card>

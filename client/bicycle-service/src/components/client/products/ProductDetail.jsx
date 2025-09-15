@@ -1,15 +1,16 @@
+// src/components/client/products/ProductDetail.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Row, Col, Card, Button, Form, Spinner, Badge } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
-
-const API = process.env.REACT_APP_API_URL || '/api';
+import api from '../../../api/axiosConfig';
+import { mediaUrl } from '../../../utils/media';
 
 export default function ProductDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { token } = useAuth(); // токен покупателя (не сервис-центра)
+    const { user } = useAuth(); // проверяем именно user
     const [loading, setLoading] = useState(true);
     const [p, setP] = useState(null);
     const [qty, setQty] = useState(1);
@@ -19,12 +20,13 @@ export default function ProductDetail() {
         async function load() {
             setLoading(true);
             try {
-                const res = await fetch(`${API}/products/${id}`);
-                if (!res.ok) throw new Error();
-                const data = await res.json();
+                const { data } = await api.get(`/products/${id}`);
                 if (!aborted) setP(data);
             } catch {
-                toast.error('Не удалось загрузить товар');
+                if (!aborted) {
+                    toast.error('Не удалось загрузить товар');
+                    setP(null);
+                }
             } finally {
                 if (!aborted) setLoading(false);
             }
@@ -34,20 +36,16 @@ export default function ProductDetail() {
     }, [id]);
 
     async function addToCart() {
-        if (!token) {
+        if (!user) {
             navigate('/login', { replace: true, state: { from: `/product/${id}` } });
             return;
         }
         try {
-            const res = await fetch(`${API}/cart/add`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ productId: p.id, quantity: Number(qty) || 1 })
-            });
-            if (!res.ok) throw new Error();
+            await api.post('/carts/add', { productId: p.id, quantity: Number(qty) || 1 });
             toast.success('Добавлено в корзину');
-        } catch {
-            toast.error('Ошибка при добавлении в корзину');
+        } catch (e) {
+            const msg = e?.response?.data?.message || 'Ошибка при добавлении в корзину';
+            toast.error(msg);
         }
     }
 
@@ -62,7 +60,7 @@ export default function ProductDetail() {
                 <Col md={5}>
                     <Card>
                         {p.photo ? (
-                            <Card.Img src={p.photo} alt={p.name} style={{ objectFit: 'cover', height: 360 }} />
+                            <Card.Img src={mediaUrl(p.photo)} alt={p.name} style={{ objectFit: 'cover', height: 360 }} />
                         ) : (
                             <div className="p-5 text-center text-muted">Нет изображения</div>
                         )}
@@ -91,7 +89,9 @@ export default function ProductDetail() {
                                 <Card.Title className="h6 mb-2">Сервисный центр</Card.Title>
                                 <div className="mb-1"><strong>{center.name}</strong></div>
                                 <div className="text-muted small">{center.address}</div>
-                                <Button as={Link} to={`/center/${center.id}`} variant="link" className="p-0 mt-2">Перейти в профиль центра →</Button>
+                                <Button as={Link} to={`/center/${center.id}`} variant="link" className="p-0 mt-2">
+                                    Перейти в профиль центра →
+                                </Button>
                             </Card.Body>
                         </Card>
                     )}

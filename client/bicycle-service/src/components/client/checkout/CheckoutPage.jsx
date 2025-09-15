@@ -1,13 +1,13 @@
+// src/components/client/checkout/CheckoutPage.jsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
-
-const API = process.env.REACT_APP_API_URL || '/api';
+import api from '../../../api/axiosConfig';
 
 export default function CheckoutPage() {
-    const { token } = useAuth();
+    const { user } = useAuth(); // сам токен не нужен — axios подставит из localStorage
     const navigate = useNavigate();
 
     const [loadingCart, setLoadingCart] = useState(true);
@@ -21,22 +21,24 @@ export default function CheckoutPage() {
     async function loadCart() {
         setLoadingCart(true);
         try {
-            const res = await fetch(`${API}/cart`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) throw new Error();
-            const data = await res.json();
+            const { data } = await api.get('/carts');
             setCart(data);
-        } catch {
-            toast.error('Не удалось загрузить корзину');
+        } catch (e) {
+            const msg = e?.response?.data?.message || 'Не удалось загрузить корзину';
+            toast.error(msg);
         } finally {
             setLoadingCart(false);
         }
     }
 
-    useEffect(() => { loadCart(); /* eslint-disable-next-line */ }, []);
+    useEffect(() => { loadCart(); }, []);
 
     const subtotal = useMemo(() => {
         if (!cart?.CartItems) return 0;
-        return cart.CartItems.reduce((sum, ci) => sum + Number(ci.Product?.price || 0) * ci.quantity, 0);
+        return cart.CartItems.reduce(
+            (sum, ci) => sum + Number(ci.Product?.price || 0) * ci.quantity,
+            0
+        );
     }, [cart]);
 
     async function placeOrder(e) {
@@ -47,24 +49,26 @@ export default function CheckoutPage() {
         }
         setSubmitting(true);
         try {
-            const res = await fetch(`${API}/orders`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ deliveryAddress, paymentMethod, deliveryMethod }),
+            const { data } = await api.post('/orders', {
+                deliveryAddress,
+                paymentMethod,
+                deliveryMethod,
             });
-            if (!res.ok) {
-                let msg = 'Не удалось оформить заказ';
-                try { const err = await res.json(); if (err?.message) msg = err.message; } catch { }
-                throw new Error(msg);
-            }
-            const { order } = await res.json();
+            const orderId = data?.order?.id || data?.id; // на случай разной формы ответа
             toast.success('Заказ оформлен');
-            navigate(`/orders/${order.id}`);
+            navigate(`/orders/${orderId}`);
         } catch (e) {
-            toast.error(e.message);
+            const msg = e?.response?.data?.message || 'Не удалось оформить заказ';
+            toast.error(msg);
         } finally {
             setSubmitting(false);
         }
+    }
+
+    // На всякий случай (хотя маршрут обёрнут в PrivateRoute)
+    if (!user) {
+        navigate('/login', { replace: true, state: { from: '/checkout' } });
+        return null;
     }
 
     if (loadingCart) return <div className="d-flex justify-content-center py-5"><Spinner /></div>;

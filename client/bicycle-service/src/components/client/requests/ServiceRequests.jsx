@@ -22,7 +22,7 @@ export default function ServiceRequests() {
         setLoading(true);
         try {
             // фильтруем по userId (безопаснее и меньше данных)
-            const res = await fetch(`${API}/servicerequests?userId=${user.id}`, {
+            const res = await fetch(`${API}/serviceRequests?userId=${user.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (!res.ok) throw new Error();

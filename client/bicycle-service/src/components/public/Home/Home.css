@@ -1,0 +1,99 @@
+.home-topbar {
+    background: #111;
+    color: #fff;
+    border-radius: 12px;
+}
+
+/* HERO */
+.home-hero {
+    border: none;
+    border-radius: 18px;
+    position: relative;
+    min-height: 360px;
+    background: #f3f4f6;
+}
+
+.home-hero__img {
+    position: absolute;
+    inset: 0;
+    /* только изображение, никаких непрозрачных градиентов сверху */
+    background-image: var(--hero-url, none);
+    background-size: cover;
+    background-position: center 55%;
+    background-repeat: no-repeat;
+    filter: saturate(1.05);
+}
+
+/* полупрозрачная вуаль слева */
+.home-hero__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .55) 55%, rgba(255, 255, 255, 0) 75%);
+}
+
+.home-hero__content {
+    position: relative;
+    max-width: 520px;
+}
+
+/* side promo */
+.home-side {
+    border: none;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #eef1f4;
+}
+
+.home-side__img {
+    height: 200px;
+    background-image: var(--side-url, none);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* features */
+.home-feature {
+    border: none;
+    border-radius: 16px;
+}
+
+.home-feature.dark {
+    background: #111;
+    color: #fff;
+}
+
+.home-feature__icon {
+    font-size: 24px;
+    padding: 14px 14px 0 14px;
+}
+
+/* OS block */
+.home-os {
+    border: none;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #f6f7f9;
+}
+
+.home-os__img {
+    height: 100%;
+    min-height: 240px;
+    background-image: var(--os-url, none);
+    background-size: cover;
+    background-position: center 40%;
+    background-repeat: no-repeat;
+}
+
+/* CTA */
+.home-cta {
+    border: none;
+    border-radius: 16px;
+    background: #f2f3f7;
+}
+
+@media (max-width:991px) {
+    .home-hero {
+        min-height: 380px;
+    }
+}

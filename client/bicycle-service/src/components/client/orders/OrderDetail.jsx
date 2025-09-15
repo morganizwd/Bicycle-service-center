@@ -1,46 +1,52 @@
+// src/components/client/orders/OrderDetail.jsx
 import React, { useEffect, useState } from 'react';
-import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
-import { useParams } from 'react-router-dom';
+import { Badge, Card, Col, Row, Spinner, Table, Button } from 'react-bootstrap';
+import { useParams, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../../context/AuthContext';
-
-const API = process.env.REACT_APP_API_URL || '/api';
+import api from '../../../api/axiosConfig';
 
 const statusColor = (s) => ({
     pending: 'secondary',
     processing: 'info',
     shipped: 'primary',
     delivered: 'success',
-    cancelled: 'danger'
+    cancelled: 'danger',
 }[s] || 'secondary');
 
 export default function OrderDetail() {
-    const { token } = useAuth();
     const { id } = useParams();
     const [loading, setLoading] = useState(true);
     const [order, setOrder] = useState(null);
 
-    async function load() {
-        setLoading(true);
-        try {
-            const res = await fetch(`${API}/orders/${id}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) throw new Error();
-            setOrder(await res.json());
-        } catch {
-            toast.error('Не удалось загрузить заказ');
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        let ignore = false;
+        async function load() {
+            setLoading(true);
+            try {
+                const { data } = await api.get(`/orders/${id}`);
+                if (!ignore) setOrder(data);
+            } catch {
+                toast.error('Не удалось загрузить заказ');
+            } finally {
+                if (!ignore) setLoading(false);
+            }
         }
-    }
-
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+        load();
+        return () => { ignore = true; };
+    }, [id]);
 
     if (loading) return <div className="d-flex justify-content-center py-5"><Spinner /></div>;
     if (!order) return null;
 
+    const items = order.orderItems || order.OrderItems || [];
+
     return (
         <>
-            <h3 className="mb-3">Заказ #{order.id}</h3>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <h3 className="mb-0">Заказ #{order.id}</h3>
+                <Button as={Link} to="/orders" variant="outline-secondary" size="sm">← К списку заказов</Button>
+            </div>
+
             <Row className="g-3">
                 <Col lg={8}>
                     <Card>
@@ -55,14 +61,22 @@ export default function OrderDetail() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {order.orderItems?.map(oi => (
-                                        <tr key={oi.id}>
-                                            <td>{oi.Product?.name}</td>
-                                            <td className="text-end">{Number(oi.priceAtPurchase).toFixed(2)} ₽</td>
-                                            <td className="text-center">{oi.quantity}</td>
-                                            <td className="text-end">{(Number(oi.priceAtPurchase) * oi.quantity).toFixed(2)} ₽</td>
-                                        </tr>
-                                    ))}
+                                    {items.map(oi => {
+                                        const price = Number(oi.priceAtPurchase ?? oi.price ?? 0);
+                                        const qty = Number(oi.quantity ?? 0);
+                                        const name = oi.Product?.name || oi.product?.name || '—';
+                                        return (
+                                            <tr key={oi.id}>
+                                                <td>{name}</td>
+                                                <td className="text-end">{price.toFixed(2)} ₽</td>
+                                                <td className="text-center">{qty}</td>
+                                                <td className="text-end">{(price * qty).toFixed(2)} ₽</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {items.length === 0 && (
+                                        <tr><td colSpan={4} className="text-center text-muted py-4">Позиции не найдены</td></tr>
+                                    )}
                                 </tbody>
                             </Table>
                         </Card.Body>
@@ -72,11 +86,11 @@ export default function OrderDetail() {
                     <Card>
                         <Card.Body>
                             <div className="mb-2">Статус: <Badge bg={statusColor(order.status)}>{order.status}</Badge></div>
-                            <div className="mb-2">Дата: <strong>{new Date(order.orderDate).toLocaleString()}</strong></div>
-                            <div className="mb-2">Адрес: <strong>{order.deliveryAddress}</strong></div>
+                            <div className="mb-2">Дата: <strong>{order.orderDate ? new Date(order.orderDate).toLocaleString() : '—'}</strong></div>
+                            <div className="mb-2">Адрес: <strong>{order.deliveryAddress || '—'}</strong></div>
                             <div className="d-flex justify-content-between">
                                 <div>Итого:</div>
-                                <div className="fw-bold">{Number(order.totalCost).toFixed(2)} ₽</div>
+                                <div className="fw-bold">{Number(order.totalCost ?? 0).toFixed(2)} ₽</div>
                             </div>
                         </Card.Body>
                     </Card>
