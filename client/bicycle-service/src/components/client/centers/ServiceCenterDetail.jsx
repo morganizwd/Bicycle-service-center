@@ -247,7 +247,7 @@ export default function ServiceCenterDetail() {
                                     {product.photo && (
                                         <Card.Img
                                             variant="top"
-                                            src={product.photo}
+                                            src={mediaUrl(product.photo)}
                                             alt={product.name}
                                             style={{ objectFit: 'cover', height: 140 }}
                                         />

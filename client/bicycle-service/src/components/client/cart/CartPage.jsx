@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
 import api from '../../../api/axiosConfig';
+import { mediaUrl } from '../../../utils/media';
 
 export default function CartPage() {
     const { user } = useAuth(); // сам токен не нужен – axios сам подставит
@@ -115,7 +116,7 @@ export default function CartPage() {
                                                     <div className="d-flex align-items-center gap-2">
                                                         {ci.Product?.photo && (
                                                             <img
-                                                                src={ci.Product.photo}
+                                                                src={mediaUrl(ci.Product.photo)}
                                                                 alt={ci.Product.name}
                                                                 width={56}
                                                                 height={56}

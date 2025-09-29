@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
 import api from '../../../api/axiosConfig';
+import { mediaUrl } from '../../../utils/media';
 
 import './ProductCatalog.css';
 
@@ -182,7 +183,7 @@ export default function ProductCatalog() {
                         {items.map((p) => {
                             const outOfStock = Number(p.stock) <= 0;
                             const adding = addingId === p.id;
-                            const img = p.photo || placeholderUrl;
+                            const img = p.photo ? mediaUrl(p.photo) : placeholderUrl;
                             return (
                                 <Col key={p.id} sm={6} md={4} lg={3}>
                                     <Card className="pcard h-100">
