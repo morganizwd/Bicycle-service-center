@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
     Navbar,
     Nav,
@@ -149,10 +149,10 @@ export default function Header() {
                         ) : (
                             <>
                                 <Nav.Link as={NavLink} to="/login">
-                                    Войти
+                                    Log in
                                 </Nav.Link>
                                 <Button as={NavLink} to="/register" size="sm" className="ms-2">
-                                    Регистрация
+                                    Sign up
                                 </Button>
                             </>
                         )}
@@ -171,35 +171,24 @@ export default function Header() {
                                     <span className="center-chip">
                                         <span className="center-chip__dot" />
                                         <span className="center-chip__name">
-                                            {center.name || 'Сервис-центр'}
+                                            {center.name || 'Service Center'}
                                         </span>
                                     </span>
                                 }
                             >
-                                <NavDropdown.Item as={NavLink} to="/center/dashboard">
-                                    Дашборд
-                                </NavDropdown.Item>
-                                <NavDropdown.Item as={NavLink} to="/center/products">
-                                    Товары
-                                </NavDropdown.Item>
-                                <NavDropdown.Item as={NavLink} to="/center/orders">
-                                    Заказы
-                                </NavDropdown.Item>
-                                <NavDropdown.Item as={NavLink} to="/center/requests">
-                                    Заявки
-                                </NavDropdown.Item>
-                                <NavDropdown.Item as={NavLink} to="/center/reviews">
-                                    Отзывы
-                                </NavDropdown.Item>
-                                <NavDropdown.Item as={NavLink} to="/center/warranty">
-                                    Гарантия/сервис
-                                </NavDropdown.Item>
-                                <NavDropdown.Item as={NavLink} to="/center/profile">
-                                    Настройки профиля
-                                </NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/dashboard">Dashboard</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/products">Products</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/services">Workshop Services</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/components">Components</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/pricing">Price Lists</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/orders">Orders</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/requests">Service Requests</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/reviews">Reviews</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/warranty">Repair Warranties</NavDropdown.Item>
+                                <NavDropdown.Item as={NavLink} to="/center/profile">Profile Settings</NavDropdown.Item>
                                 <NavDropdown.Divider />
                                 <NavDropdown.Item onClick={handleLogoutCenter}>
-                                    Выйти как центр
+                                    Log out
                                 </NavDropdown.Item>
                             </NavDropdown>
                         ) : (
@@ -207,13 +196,13 @@ export default function Header() {
                                 align="end"
                                 id="center-auth"
                                 className="ms-lg-3"
-                                title="Для сервис-центров"
+                                title="Service Center"
                             >
                                 <NavDropdown.Item as={NavLink} to="/center/login">
-                                    Войти
+                                    Log in
                                 </NavDropdown.Item>
                                 <NavDropdown.Item as={NavLink} to="/center/register">
-                                    Регистрация
+                                    Sign up
                                 </NavDropdown.Item>
                             </NavDropdown>
                         )}
@@ -223,3 +212,6 @@ export default function Header() {
         </Navbar>
     );
 }
+
+
+

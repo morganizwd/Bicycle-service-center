@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import './App.css';
 import { Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
@@ -6,7 +6,6 @@ import { Container } from 'react-bootstrap';
 
 import Header from './components/Header';
 
-// Публичные страницы
 import Home from './components/public/Home/Home';
 import Registration from './components/auth/Registration/Registration';
 import Login from './components/auth/Login/Login';
@@ -20,7 +19,6 @@ import ProductDetail from './components/client/products/ProductDetail';
 import ServiceCenterCatalog from './components/client/centers/ServiceCenterCatalog';
 import ServiceCenterDetail from './components/client/centers/ServiceCenterDetail';
 
-// Пользователь (авторизованный)
 import CartPage from './components/client/cart/CartPage';
 import CheckoutPage from './components/client/checkout/CheckoutPage';
 import ProfilePage from './components/client/profile/ProfilePage';
@@ -29,20 +27,20 @@ import OrderDetail from './components/client/orders/OrderDetail';
 import ServiceRequests from './components/client/requests/ServiceRequests';
 import CreateServiceRequest from './components/client/requests/CreateServiceRequest';
 
-// Кабинет сервисного центра
 import ServiceCenterRoute from './components/ServiceCenterRoute';
 import CenterDashboard from './components/center/dashboard/CenterDashboard';
 import CenterProductManagement from './components/center/products/CenterProductManagement';
+import CenterServiceManagement from './components/center/services/CenterServiceManagement';
+import CenterComponentManagement from './components/center/components/CenterComponentManagement';
+import CenterPriceListManagement from './components/center/pricing/CenterPriceListManagement';
 import CenterOrderManagement from './components/center/orders/CenterOrderManagement';
 import CenterServiceRequests from './components/center/requests/CenterServiceRequests';
 import CenterReviewsManagement from './components/center/reviews/CenterReviewsManagement';
 import CenterWarrantyManagement from './components/center/warranty/CenterWarrantyManagement';
 import CenterProfileSettings from './components/center/profile/CenterProfileSettings';
 
-// Гард для пользователя
 import PrivateRoute from './components/PrivateRoute';
 
-// Прочее
 import NotFound from './components/NotFound';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -52,22 +50,22 @@ function App() {
       <Header />
       <Container className="py-4">
         <Routes>
-          {/* Публичные */}
+          {/* РџСѓР±Р»РёС‡РЅС‹Рµ */}
           <Route path="/" element={<Home />} />
           <Route path="/register" element={<Registration />} />
           <Route path="/login" element={<Login />} />
 
-          {/* Авторизация сервисного центра */}
+          {/* РђРІС‚РѕСЂРёР·Р°С†РёСЏ СЃРµСЂРІРёСЃРЅРѕРіРѕ С†РµРЅС‚СЂР° */}
           <Route path="/center/register" element={<ServiceCenterRegistration />} />
           <Route path="/center/login" element={<ServiceCenterLogin />} />
 
-          {/* Каталог товаров и сервис-центров */}
+          {/* РљР°С‚Р°Р»РѕРі С‚РѕРІР°СЂРѕРІ Рё СЃРµСЂРІРёСЃ-С†РµРЅС‚СЂРѕРІ */}
           <Route path="/products" element={<ProductCatalog />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/centers" element={<ServiceCenterCatalog />} />
           <Route path="/center/:id" element={<ServiceCenterDetail />} />
 
-          {/* Пользователь (protected) */}
+          {/* РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ (protected) */}
           <Route
             path="/cart"
             element={
@@ -125,7 +123,7 @@ function App() {
             }
           />
 
-          {/* Кабинет сервисного центра (protected) */}
+          {/* РљР°Р±РёРЅРµС‚ СЃРµСЂРІРёСЃРЅРѕРіРѕ С†РµРЅС‚СЂР° (protected) */}
           <Route
             path="/center/dashboard"
             element={
@@ -139,6 +137,30 @@ function App() {
             element={
               <ServiceCenterRoute>
                 <CenterProductManagement />
+              </ServiceCenterRoute>
+            }
+          />
+          <Route
+            path="/center/services"
+            element={
+              <ServiceCenterRoute>
+                <CenterServiceManagement />
+              </ServiceCenterRoute>
+            }
+          />
+          <Route
+            path="/center/components"
+            element={
+              <ServiceCenterRoute>
+                <CenterComponentManagement />
+              </ServiceCenterRoute>
+            }
+          />
+          <Route
+            path="/center/pricing"
+            element={
+              <ServiceCenterRoute>
+                <CenterPriceListManagement />
               </ServiceCenterRoute>
             }
           />
@@ -193,3 +215,7 @@ function App() {
 }
 
 export default App;
+
+
+
+

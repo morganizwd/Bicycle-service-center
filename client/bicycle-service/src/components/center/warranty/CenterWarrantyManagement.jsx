@@ -1,339 +1,389 @@
-// src/components/center/warranty/CenterWarrantyManagement.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { Table, Form, Button, Card, Spinner, Modal, InputGroup } from 'react-bootstrap';
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import { Badge, Button, Form, Modal, Spinner, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../context/AuthContext';
+import {
+    listRepairWarranties,
+    createRepairWarranty,
+    updateRepairWarranty,
+    deleteRepairWarranty,
+} from '../../../api/repairWarranties';
+import { listWorkshopServices } from '../../../api/workshopServices';
 import api from '../../../api/axiosConfig';
+import { authHeader, getServiceCenterToken } from '../../../utils/auth';
 
-const empty = {
-    orderItemId: '',
-    warrantyPeriod: '',
-    serviceConditions: '',
-    serviceCenterContacts: '',
-    validUntil: '',
+const STATUS_OPTIONS = [
+    { value: 'active', label: 'Active' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'void', label: 'Voided' },
+];
+
+function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function addMonths(dateString, months) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
+    const result = new Date(date);
+    result.setMonth(result.getMonth() + Number(months || 0));
+    return result.toISOString().slice(0, 10);
+}
+
+const EMPTY_FORM = {
+    serviceRequestId: '',
+    workshopServiceId: '',
+    coverageDescription: '',
+    warrantyPeriodMonths: 6,
+    conditions: '',
+    status: 'active',
+    startDate: todayISO(),
+    endDate: addMonths(todayISO(), 6),
 };
 
 export default function CenterWarrantyManagement() {
-    const { center, centerToken, centerLoading } = useAuth();
-    const [items, setItems] = useState([]);         // существующие гарантии
-    const [form, setForm] = useState(empty);
+    const { center } = useAuth();
+    const [warranties, setWarranties] = useState([]);
+    const [requests, setRequests] = useState([]);
+    const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [form, setForm] = useState(EMPTY_FORM);
 
-    // --- состояние модалки выбора позиции заказа ---
-    const [pickerOpen, setPickerOpen] = useState(false);
-    const [pickerLoading, setPickerLoading] = useState(false);
-    const [pickerItems, setPickerItems] = useState([]); // расплющенные orderItems
-    const [pickerQuery, setPickerQuery] = useState('');
+    const requestMap = useMemo(() => new Map(requests.map((req) => [req.id, req])), [requests]);
+    const serviceMap = useMemo(() => new Map(services.map((svc) => [svc.id, svc])), [services]);
 
-    // набор уже покрытых orderItemId, чтобы не предлагать их повторно
-    const coveredIds = useMemo(() => new Set(items.map(w => w.orderItemId)), [items]);
-
-    async function load() {
+    useEffect(() => {
         if (!center?.id) {
-            setItems([]);
+            setWarranties([]);
+            setRequests([]);
+            setServices([]);
             setLoading(false);
             return;
         }
-        setLoading(true);
-        try {
-            // ПУБЛИЧНЫЙ список гарантий по центру
-            const { data } = await api.get('/warrantyServices', { params: { serviceCenterId: center.id } });
-            setItems(Array.isArray(data) ? data : []);
-        } catch (e) {
-            toast.error(e?.response?.data?.message || 'Не удалось загрузить гарантии');
-        } finally {
-            setLoading(false);
+        let cancelled = false;
+        async function load() {
+            setLoading(true);
+            try {
+                const token = getServiceCenterToken();
+                const auth = authHeader(token);
+                const [warrantiesRes, requestsRes, servicesRes] = await Promise.all([
+                    listRepairWarranties({ serviceCenterId: center.id }, token),
+                    api.get('/serviceRequests', { params: { serviceCenterId: center.id }, headers: auth }),
+                    listWorkshopServices({ serviceCenterId: center.id }, token),
+                ]);
+                if (cancelled) return;
+                setWarranties(Array.isArray(warrantiesRes.data) ? warrantiesRes.data : []);
+                setRequests(Array.isArray(requestsRes.data) ? requestsRes.data : []);
+                setServices(Array.isArray(servicesRes.data) ? servicesRes.data : []);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error(error);
+                    toast.error('Failed to load repair warranties');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         }
-    }
-
-    useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => {
+            cancelled = true;
+        };
     }, [center?.id]);
 
-    const onChange = (e) =>
-        setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    function openCreate() {
+        setEditingId(null);
+        setForm({ ...EMPTY_FORM });
+        setShowModal(true);
+    }
 
-    async function create(e) {
-        e.preventDefault();
+    function openEdit(warranty) {
+        setEditingId(warranty.id);
+        setForm({
+            serviceRequestId: warranty.serviceRequestId || '',
+            workshopServiceId: warranty.workshopServiceId || '',
+            coverageDescription: warranty.coverageDescription || '',
+            warrantyPeriodMonths: Number(warranty.warrantyPeriodMonths || 0) || 1,
+            conditions: warranty.conditions || '',
+            status: warranty.status || 'active',
+            startDate: warranty.startDate ? new Date(warranty.startDate).toISOString().slice(0, 10) : todayISO(),
+            endDate: warranty.endDate ? new Date(warranty.endDate).toISOString().slice(0, 10) : todayISO(),
+        });
+        setShowModal(true);
+    }
+
+    async function refetch() {
+        if (!center?.id) return;
         try {
-            await api.post('/warrantyServices', form, {
-                headers: { Authorization: `Bearer ${centerToken}` }, // оставим явный заголовок
-            });
-            toast.success('Гарантия создана');
-            setForm(empty);
-            await load();
-        } catch (e) {
-            toast.error(e?.response?.data?.message || 'Ошибка при создании гарантии');
+            const token = getServiceCenterToken();
+            const { data } = await listRepairWarranties({ serviceCenterId: center.id }, token);
+            setWarranties(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error(error);
+            toast.error('Unable to refresh warranty list');
         }
     }
 
-    async function remove(id) {
-        if (!window.confirm('Удалить запись гарантии?')) return;
-        try {
-            await api.delete(`/warrantyServices/${id}`, {
-                headers: { Authorization: `Bearer ${centerToken}` },
-            });
-            toast.success('Гарантия удалена');
-            await load();
-        } catch (e) {
-            toast.error(e?.response?.data?.message || 'Ошибка при удалении');
-        }
+    function onWarrantyPeriodChange(months) {
+        setForm((prev) => ({
+            ...prev,
+            warrantyPeriodMonths: months,
+            endDate: prev.startDate ? addMonths(prev.startDate, months) : prev.endDate,
+        }));
     }
 
-    // ------- модалка выбора позиции заказа -------
-    const openPicker = async () => {
-        setPickerOpen(true);
-        setPickerLoading(true);
+    async function handleSubmit(event) {
+        event.preventDefault();
+        if (!center?.id) return;
+
+        if (!form.serviceRequestId || !form.coverageDescription || !form.startDate || !form.endDate) {
+            toast.warn('Select a request and fill required fields');
+            return;
+        }
+
+        const payload = {
+            serviceRequestId: Number(form.serviceRequestId),
+            workshopServiceId: form.workshopServiceId ? Number(form.workshopServiceId) : null,
+            coverageDescription: form.coverageDescription.trim(),
+            warrantyPeriodMonths: Number(form.warrantyPeriodMonths || 0) || 1,
+            conditions: form.conditions?.trim() || null,
+            status: form.status,
+            startDate: new Date(form.startDate).toISOString(),
+            endDate: new Date(form.endDate).toISOString(),
+        };
+
+        if (new Date(payload.startDate) > new Date(payload.endDate)) {
+            toast.warn('End date must be after start date');
+            return;
+        }
+
+        setSaving(true);
         try {
-            // заказы текущего сервис-центра (по токену центра)
-            const { data: orders } = await api.get('/service-centers/orders', {
-                headers: { Authorization: `Bearer ${centerToken}` },
-            });
-
-            // расплющим orderItems, добавим удобные поля
-            const flat = [];
-            (orders || []).forEach((o) => {
-                const ois = o.orderItems || o.OrderItems || []; // на всякий случай оба варианта
-                ois.forEach((oi) => {
-                    // показываем только позиции товаров этого центра (на будущее)
-                    const prod = oi.Product || oi.product || {};
-                    if (prod.serviceCenterId && center?.id && prod.serviceCenterId !== center.id) return;
-
-                    flat.push({
-                        orderId: o.id,
-                        orderDate: o.orderDate,
-                        user: o.User || o.user || null,
-                        product: prod,
-                        quantity: oi.quantity,
-                        priceAtPurchase: oi.priceAtPurchase,
-                        orderItemId: oi.id,
-                    });
-                });
-            });
-
-            setPickerItems(flat);
-        } catch (e) {
-            toast.error(e?.response?.data?.message || 'Не удалось загрузить заказы');
+            if (editingId) {
+                await updateRepairWarranty(editingId, payload);
+                toast.success('Warranty updated');
+            } else {
+                await createRepairWarranty(payload);
+                toast.success('Warranty created');
+            }
+            setShowModal(false);
+            setEditingId(null);
+            setForm({ ...EMPTY_FORM });
+            await refetch();
+        } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.message || 'Failed to save warranty');
         } finally {
-            setPickerLoading(false);
+            setSaving(false);
         }
-    };
-
-    const closePicker = () => setPickerOpen(false);
-
-    const filteredPickerItems = useMemo(() => {
-        const q = pickerQuery.trim().toLowerCase();
-        return pickerItems
-            .filter(it => !coveredIds.has(it.orderItemId)) // исключаем уже покрытые гарантией
-            .filter((it) => {
-                if (!q) return true;
-                const fields = [
-                    String(it.orderId),
-                    it.product?.name || '',
-                    it.product?.brand || '',
-                    it.product?.model || '',
-                    (it.user ? `${it.user.firstName || ''} ${it.user.lastName || ''}`.trim() : ''),
-                ]
-                    .join(' ')
-                    .toLowerCase();
-                return fields.includes(q);
-            })
-            .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
-    }, [pickerItems, pickerQuery, coveredIds]);
-
-    const pickItem = (oi) => {
-        setForm(f => ({ ...f, orderItemId: oi.orderItemId }));
-        setPickerOpen(false);
-    };
-
-    // ----------- UI -----------
-    if (centerLoading || loading) {
-        return (
-            <div className="d-flex justify-content-center py-5">
-                <Spinner animation="border" role="status" />
-            </div>
-        );
     }
 
-    if (!center) return <div>Требуется вход сервисного центра</div>;
+    async function handleDelete(id) {
+        if (!window.confirm('Delete this warranty?')) return;
+        try {
+            const token = getServiceCenterToken();
+            await deleteRepairWarranty(id, token);
+            toast.success('Warranty deleted');
+            setWarranties((prev) => prev.filter((warranty) => warranty.id !== id));
+        } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.message || 'Failed to delete warranty');
+        }
+    }
 
     return (
-        <>
-            <h3 className="mb-3">Гарантии и сервис</h3>
+        <div>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <h3 className="mb-0">Repair Warranties</h3>
+                <Button onClick={openCreate}>Create Warranty</Button>
+            </div>
 
-            <Card className="mb-4">
-                <Card.Body>
-                    <Card.Title>Создать гарантию</Card.Title>
-                    <Form onSubmit={create}>
-                        <Form.Group className="mb-2">
-                            <Form.Label>ID позиции заказа *</Form.Label>
-                            <InputGroup>
-                                <Form.Control
-                                    name="orderItemId"
-                                    value={form.orderItemId}
-                                    onChange={onChange}
-                                    placeholder="Выберите из заказов"
-                                    required
-                                    readOnly
-                                />
-                                <Button variant="outline-secondary" onClick={openPicker}>
-                                    Выбрать из заказов
-                                </Button>
-                            </InputGroup>
-                            <Form.Text className="text-muted">
-                                Нажмите «Выбрать из заказов», чтобы выбрать позицию заказа (товар) с оформленного заказа.
-                            </Form.Text>
-                        </Form.Group>
-                        <Form.Group className="mb-2">
-                            <Form.Label>Срок гарантии *</Form.Label>
-                            <Form.Control
-                                name="warrantyPeriod"
-                                value={form.warrantyPeriod}
-                                onChange={onChange}
+            {loading ? (
+                <div className="d-flex justify-content-center py-5"><Spinner /></div>
+            ) : (
+                <Table responsive striped hover className="align-middle">
+                    <thead>
+                        <tr>
+                            <th>Request</th>
+                            <th>Service</th>
+                            <th>Coverage</th>
+                            <th>Period</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {warranties.map((warranty) => {
+                            const request = warranty.serviceRequest || requestMap.get(warranty.serviceRequestId);
+                            const svc = warranty.workshopService || serviceMap.get(warranty.workshopServiceId);
+                            return (
+                                <tr key={warranty.id}>
+                                    <td>
+                                        <div className="fw-semibold">Request #{warranty.serviceRequestId}</div>
+                                        {request && (
+                                            <div className="text-muted small">
+                                                {request.problemDescription}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td>{svc ? svc.name : warranty.workshopServiceId ? `Service #${warranty.workshopServiceId}` : '—'}</td>
+                                    <td>
+                                        <div>{warranty.coverageDescription}</div>
+                                        {warranty.conditions && (
+                                            <div className="text-muted small">Conditions: {warranty.conditions}</div>
+                                        )}
+                                    </td>
+                                    <td>
+                                        <div>{new Date(warranty.startDate).toLocaleDateString()} — {new Date(warranty.endDate).toLocaleDateString()}</div>
+                                        <div className="text-muted small">{warranty.warrantyPeriodMonths} months</div>
+                                    </td>
+                                    <td>
+                                        <Badge bg={warranty.status === 'active' ? 'success' : warranty.status === 'expired' ? 'secondary' : 'warning'}>
+                                            {STATUS_OPTIONS.find((option) => option.value === warranty.status)?.label || warranty.status}
+                                        </Badge>
+                                    </td>
+                                    <td className="text-end">
+                                        <div className="d-flex justify-content-end gap-2">
+                                            <Button size="sm" variant="outline-secondary" onClick={() => openEdit(warranty)}>
+                                                Edit
+                                            </Button>
+                                            <Button size="sm" variant="outline-danger" onClick={() => handleDelete(warranty.id)}>
+                                                Delete
+                                            </Button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {warranties.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="text-center text-muted py-4">
+                                    No repair warranties have been issued yet
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </Table>
+            )}
+
+            <Modal centered show={showModal} onHide={() => setShowModal(false)} size="lg">
+                <Form onSubmit={handleSubmit}>
+                    <Modal.Header closeButton>
+                        <Modal.Title>{editingId ? 'Edit Warranty' : 'Create Warranty'}</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Service request *</Form.Label>
+                            <Form.Select
+                                value={form.serviceRequestId}
+                                onChange={(e) => setForm((prev) => ({ ...prev, serviceRequestId: e.target.value }))}
                                 required
-                            />
+                            >
+                                <option value="">Select request…</option>
+                                {requests.map((request) => (
+                                    <option key={request.id} value={request.id}>
+                                        #{request.id} — {request.problemDescription?.slice(0, 60) || 'No description'}
+                                    </option>
+                                ))}
+                            </Form.Select>
                         </Form.Group>
-                        <Form.Group className="mb-2">
-                            <Form.Label>Условия сервиса *</Form.Label>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Workshop service</Form.Label>
+                            <Form.Select
+                                value={form.workshopServiceId}
+                                onChange={(e) => setForm((prev) => ({ ...prev, workshopServiceId: e.target.value }))}
+                            >
+                                <option value="">Do not link</option>
+                                {services.map((service) => (
+                                    <option key={service.id} value={service.id}>{service.name}</option>
+                                ))}
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Coverage description *</Form.Label>
                             <Form.Control
                                 as="textarea"
-                                rows={2}
-                                name="serviceConditions"
-                                value={form.serviceConditions}
-                                onChange={onChange}
-                                required
-                            />
-                        </Form.Group>
-                        <Form.Group className="mb-2">
-                            <Form.Label>Контакты сервис-центра *</Form.Label>
-                            <Form.Control
-                                name="serviceCenterContacts"
-                                value={form.serviceCenterContacts}
-                                onChange={onChange}
+                                rows={3}
+                                value={form.coverageDescription}
+                                onChange={(e) => setForm((prev) => ({ ...prev, coverageDescription: e.target.value }))}
                                 required
                             />
                         </Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label>Действительна до *</Form.Label>
+                            <Form.Label>Service conditions</Form.Label>
                             <Form.Control
-                                type="date"
-                                name="validUntil"
-                                value={form.validUntil}
-                                onChange={onChange}
-                                required
+                                as="textarea"
+                                rows={3}
+                                value={form.conditions}
+                                onChange={(e) => setForm((prev) => ({ ...prev, conditions: e.target.value }))}
+                                placeholder="Example: preventive inspection every 3 months"
                             />
                         </Form.Group>
-                        <Button type="submit">Создать</Button>
-                    </Form>
-                </Card.Body>
-            </Card>
-
-            <Table striped bordered hover responsive>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>OrderItem</th>
-                        <th>Период</th>
-                        <th>Условия</th>
-                        <th>Контакты</th>
-                        <th>До</th>
-                        <th>Товар</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {items.map((w, i) => (
-                        <tr key={w.id}>
-                            <td>{i + 1}</td>
-                            <td>{w.orderItemId}</td>
-                            <td>{w.warrantyPeriod}</td>
-                            <td style={{ maxWidth: 300 }}>{w.serviceConditions}</td>
-                            <td>{w.serviceCenterContacts}</td>
-                            <td>{w.validUntil ? new Date(w.validUntil).toLocaleDateString() : '—'}</td>
-                            <td>{w?.OrderItem?.Product?.name || '—'}</td>
-                            <td className="text-nowrap">
-                                <Button size="sm" variant="outline-danger" onClick={() => remove(w.id)}>
-                                    Удалить
-                                </Button>
-                            </td>
-                        </tr>
-                    ))}
-                    {items.length === 0 && (
-                        <tr>
-                            <td colSpan={8} className="text-center text-muted">
-                                Записей пока нет
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </Table>
-
-            {/* Модалка выбора позиции заказа */}
-            <Modal show={pickerOpen} onHide={closePicker} size="lg" centered>
-                <Modal.Header closeButton>
-                    <Modal.Title>Выберите позицию заказа</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <div className="mb-3">
-                        <InputGroup>
-                            <Form.Control
-                                placeholder="Поиск: № заказа, товар, бренд/модель, клиент…"
-                                value={pickerQuery}
-                                onChange={(e) => setPickerQuery(e.target.value)}
-                            />
-                            <Button variant="outline-secondary" onClick={() => setPickerQuery('')}>Сброс</Button>
-                        </InputGroup>
-                        <Form.Text className="text-muted">
-                            Позиции, по которым уже есть гарантия, скрыты из списка.
-                        </Form.Text>
-                    </div>
-
-                    {pickerLoading ? (
-                        <div className="d-flex justify-content-center py-4"><Spinner /></div>
-                    ) : (
-                        <Table hover responsive className="align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Заказ</th>
-                                    <th>Дата</th>
-                                    <th>Клиент</th>
-                                    <th>Товар</th>
-                                    <th className="text-center">Кол-во</th>
-                                    <th className="text-end">Цена</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredPickerItems.map((it) => (
-                                    <tr key={it.orderItemId}>
-                                        <td>#{it.orderId}</td>
-                                        <td>{new Date(it.orderDate).toLocaleString()}</td>
-                                        <td>{it.user ? `${it.user.firstName || ''} ${it.user.lastName || ''}`.trim() : '—'}</td>
-                                        <td>
-                                            <div className="fw-semibold">{it.product?.name}</div>
-                                            <div className="text-muted small">{it.product?.brand} {it.product?.model}</div>
-                                        </td>
-                                        <td className="text-center">{it.quantity}</td>
-                                        <td className="text-end">{Number(it.priceAtPurchase || it.product?.price || 0).toFixed(2)} ₽</td>
-                                        <td className="text-end">
-                                            <Button size="sm" onClick={() => pickItem(it)}>Выбрать</Button>
-                                        </td>
-                                    </tr>
+                        <div className="row g-3">
+                            <div className="col-md-4">
+                                <Form.Group>
+                                    <Form.Label>Warranty term (months) *</Form.Label>
+                                    <Form.Control
+                                        type="number"
+                                        min={1}
+                                        value={form.warrantyPeriodMonths}
+                                        onChange={(e) => onWarrantyPeriodChange(e.target.value)}
+                                        required
+                                    />
+                                </Form.Group>
+                            </div>
+                            <div className="col-md-4">
+                                <Form.Group>
+                                    <Form.Label>Start date *</Form.Label>
+                                    <Form.Control
+                                        type="date"
+                                        value={form.startDate}
+                                        onChange={(e) => setForm((prev) => ({
+                                            ...prev,
+                                            startDate: e.target.value,
+                                            endDate: prev.warrantyPeriodMonths ? addMonths(e.target.value, prev.warrantyPeriodMonths) : prev.endDate,
+                                        }))}
+                                        required
+                                    />
+                                </Form.Group>
+                            </div>
+                            <div className="col-md-4">
+                                <Form.Group>
+                                    <Form.Label>End date *</Form.Label>
+                                    <Form.Control
+                                        type="date"
+                                        value={form.endDate}
+                                        onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                                        required
+                                    />
+                                </Form.Group>
+                            </div>
+                        </div>
+                        <Form.Group className="mt-3">
+                            <Form.Label>Status</Form.Label>
+                            <Form.Select
+                                value={form.status}
+                                onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                            >
+                                {STATUS_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
-                                {filteredPickerItems.length === 0 && (
-                                    <tr>
-                                        <td colSpan={7} className="text-center text-muted py-3">Подходящих позиций не найдено</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </Table>
-                    )}
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={closePicker}>Закрыть</Button>
-                </Modal.Footer>
+                            </Form.Select>
+                        </Form.Group>
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={() => setShowModal(false)} disabled={saving}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={saving}>
+                            {saving ? 'Saving...' : editingId ? 'Save' : 'Create'}
+                        </Button>
+                    </Modal.Footer>
+                </Form>
             </Modal>
-        </>
+        </div>
     );
 }

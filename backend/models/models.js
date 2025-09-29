@@ -130,7 +130,112 @@ const WarrantyService = sequelize.define('WarrantyService', {
     validUntil: { type: DataTypes.DATE, allowNull: false },
 }, { timestamps: true });
 
+// Workshop services offered by service centers
+const WorkshopService = sequelize.define('WorkshopService', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    serviceCenterId: { type: DataTypes.INTEGER, allowNull: false },
+    name: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: false },
+    category: { type: DataTypes.STRING, allowNull: true },
+    basePrice: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    durationMinutes: { type: DataTypes.INTEGER, allowNull: true },
+    isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+}, { timestamps: true });
+
+// Repair components and spare parts
+const Component = sequelize.define('Component', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    serviceCenterId: { type: DataTypes.INTEGER, allowNull: false },
+    name: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    manufacturer: { type: DataTypes.STRING, allowNull: false },
+    supplier: { type: DataTypes.STRING, allowNull: true },
+    partNumber: { type: DataTypes.STRING, allowNull: true },
+    compatibleManufacturers: { type: DataTypes.ARRAY(DataTypes.STRING), allowNull: true },
+    compatibleModels: { type: DataTypes.ARRAY(DataTypes.STRING), allowNull: true },
+    stock: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    unit: { type: DataTypes.STRING, allowNull: false, defaultValue: 'pcs' },
+    unitPrice: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+}, { timestamps: true });
+
+// Junction table linking services with components
+const ServiceComponent = sequelize.define('ServiceComponent', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    workshopServiceId: { type: DataTypes.INTEGER, allowNull: false },
+    componentId: { type: DataTypes.INTEGER, allowNull: false },
+    quantity: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 1 },
+    unit: { type: DataTypes.STRING, allowNull: false, defaultValue: 'pcs' },
+}, { timestamps: true });
+
+// Price lists for goods and services
+const PriceList = sequelize.define('PriceList', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    serviceCenterId: { type: DataTypes.INTEGER, allowNull: false },
+    name: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    listType: { type: DataTypes.ENUM('services', 'components', 'products', 'combined'), allowNull: false, defaultValue: 'combined' },
+    effectiveFrom: { type: DataTypes.DATE, allowNull: true },
+    effectiveTo: { type: DataTypes.DATE, allowNull: true },
+    isDefault: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+}, { timestamps: true });
+
+const PriceListItem = sequelize.define('PriceListItem', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    priceListId: { type: DataTypes.INTEGER, allowNull: false },
+    itemType: { type: DataTypes.ENUM('service', 'component', 'product', 'custom'), allowNull: false },
+    referenceId: { type: DataTypes.INTEGER, allowNull: true },
+    itemName: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    unit: { type: DataTypes.STRING, allowNull: false, defaultValue: 'pcs' },
+    unitPrice: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    durationMinutes: { type: DataTypes.INTEGER, allowNull: true },
+    warrantyMonths: { type: DataTypes.INTEGER, allowNull: true },
+    isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+}, { timestamps: true });
+
+// Warranty covering repair services
+const RepairWarranty = sequelize.define('RepairWarranty', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    serviceCenterId: { type: DataTypes.INTEGER, allowNull: false },
+    serviceRequestId: { type: DataTypes.INTEGER, allowNull: false },
+    workshopServiceId: { type: DataTypes.INTEGER, allowNull: true },
+    coverageDescription: { type: DataTypes.TEXT, allowNull: false },
+    warrantyPeriodMonths: { type: DataTypes.INTEGER, allowNull: false },
+    conditions: { type: DataTypes.TEXT, allowNull: true },
+    status: { type: DataTypes.ENUM('active', 'expired', 'void'), allowNull: false, defaultValue: 'active' },
+    startDate: { type: DataTypes.DATE, allowNull: false },
+    endDate: { type: DataTypes.DATE, allowNull: false },
+}, { timestamps: true });
+
+
 /* ================= Associations ================= */
+
+// Service center relations for workshop services
+ServiceCenter.hasMany(WorkshopService, { foreignKey: 'serviceCenterId', as: 'workshopServices' });
+WorkshopService.belongsTo(ServiceCenter, { foreignKey: 'serviceCenterId', as: 'serviceCenter' });
+
+// Service center relations for components
+ServiceCenter.hasMany(Component, { foreignKey: 'serviceCenterId', as: 'components' });
+Component.belongsTo(ServiceCenter, { foreignKey: 'serviceCenterId', as: 'serviceCenter' });
+
+// Link services with their required components
+WorkshopService.belongsToMany(Component, { through: ServiceComponent, foreignKey: 'workshopServiceId', otherKey: 'componentId', as: 'components' });
+Component.belongsToMany(WorkshopService, { through: ServiceComponent, foreignKey: 'componentId', otherKey: 'workshopServiceId', as: 'services' });
+
+// Price list hierarchy
+ServiceCenter.hasMany(PriceList, { foreignKey: 'serviceCenterId', as: 'priceLists' });
+PriceList.belongsTo(ServiceCenter, { foreignKey: 'serviceCenterId', as: 'serviceCenter' });
+PriceList.hasMany(PriceListItem, { foreignKey: 'priceListId', as: 'items', onDelete: 'CASCADE', hooks: true });
+PriceListItem.belongsTo(PriceList, { foreignKey: 'priceListId', as: 'priceList' });
+
+// Repair warranty relations
+ServiceCenter.hasMany(RepairWarranty, { foreignKey: 'serviceCenterId', as: 'repairWarranties' });
+RepairWarranty.belongsTo(ServiceCenter, { foreignKey: 'serviceCenterId', as: 'serviceCenter' });
+ServiceRequest.hasMany(RepairWarranty, { foreignKey: 'serviceRequestId', as: 'repairWarranties' });
+RepairWarranty.belongsTo(ServiceRequest, { foreignKey: 'serviceRequestId', as: 'serviceRequest' });
+WorkshopService.hasMany(RepairWarranty, { foreignKey: 'workshopServiceId', as: 'repairWarranties' });
+RepairWarranty.belongsTo(WorkshopService, { foreignKey: 'workshopServiceId', as: 'workshopService' });
 
 /* User ↔ Cart */
 User.hasOne(Cart, { foreignKey: 'userId' });
@@ -205,5 +310,11 @@ module.exports = {
     Review,
     ServiceRequest,
     WarrantyService,
+    WorkshopService,
+    Component,
+    ServiceComponent,
+    PriceList,
+    PriceListItem,
+    RepairWarranty,
     sequelize,
 };
